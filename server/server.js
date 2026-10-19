@@ -4,7 +4,11 @@ import cors from "cors";
 const app = express();
 const PORT = 4000;
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173"
+  })
+);
 app.use(express.json());
 
 const users = [
@@ -49,11 +53,18 @@ let projects = [
 
 // Login
 app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
+  const email = req.body?.email?.trim();
+  const password = req.body?.password;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      message: "Email and password are required"
+    });
+  }
 
   const user = users.find(
     (item) =>
-      item.email === email &&
+      item.email.toLowerCase() === email.toLowerCase() &&
       item.password === password
   );
 
@@ -63,9 +74,12 @@ app.post("/api/login", (req, res) => {
     });
   }
 
+  // Exclude sensitive password field from response payload
+  const { password: _, ...safeUser } = user;
+
   res.json({
     token: "demo-token",
-    user
+    user: safeUser
   });
 });
 
@@ -73,7 +87,7 @@ app.post("/api/login", (req, res) => {
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
 
-  if (authHeader !== "Bearer demo-token") {
+  if (!authHeader || authHeader !== "Bearer demo-token") {
     return res.status(401).json({
       message: "Unauthorized"
     });
@@ -91,11 +105,29 @@ app.get("/api/clients", authenticate, (req, res) => {
 
 // Add client
 app.post("/api/clients", authenticate, (req, res) => {
-  const { name, email } = req.body;
+  const name = req.body?.name?.trim();
+  const email = req.body?.email?.trim();
 
   if (!name || !email) {
     return res.status(400).json({
       message: "Name and email are required"
+    });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({
+      message: "Please provide a valid email address"
+    });
+  }
+
+  const emailExists = clients.some(
+    (client) => client.email.toLowerCase() === email.toLowerCase()
+  );
+
+  if (emailExists) {
+    return res.status(409).json({
+      message: "A client with this email already exists"
     });
   }
 
@@ -169,8 +201,16 @@ app.get("/api/projects", authenticate, (req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
+  console.error("Unhandled server error:", err);
+
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({
+      message: "Invalid JSON payload"
+    });
+  }
+
   res.status(500).json({
-    message: err.message
+    message: "Internal server error"
   });
 });
 
