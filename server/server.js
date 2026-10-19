@@ -29,7 +29,7 @@ let clients = [
   }
 ];
 
-const projects = [
+let projects = [
   {
     id: 1,
     name: "Website Development",
@@ -99,8 +99,13 @@ app.post("/api/clients", authenticate, (req, res) => {
     });
   }
 
+  const nextId =
+    clients.length > 0
+      ? Math.max(...clients.map((c) => c.id)) + 1
+      : 1;
+
   const newClient = {
-    id: clients.length + 1,
+    id: nextId,
     name,
     email
   };
@@ -114,7 +119,13 @@ app.post("/api/clients", authenticate, (req, res) => {
 
 // Delete client
 app.delete("/api/clients/:id", authenticate, (req, res) => {
-  const id = req.params.id;
+  const id = Number(req.params.id);
+
+  if (Number.isNaN(id)) {
+    return res.status(400).json({
+      message: "Invalid client ID"
+    });
+  }
 
   const originalLength = clients.length;
 
@@ -128,6 +139,11 @@ app.delete("/api/clients/:id", authenticate, (req, res) => {
     });
   }
 
+  // Remove projects belonging to the deleted client
+  projects = projects.filter(
+    (project) => project.clientId !== id
+  );
+
   res.json({
     message: "Client deleted successfully"
   });
@@ -140,8 +156,9 @@ app.get("/api/projects", authenticate, (req, res) => {
   let result = projects;
 
   if (clientId) {
+    const parsedClientId = Number(clientId);
     result = projects.filter(
-      (project) => project.clientId === clientId
+      (project) => project.clientId === parsedClientId
     );
   }
 
